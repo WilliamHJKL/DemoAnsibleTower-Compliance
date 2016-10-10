@@ -33,3 +33,54 @@
   always_run: yes
 
 - include: version.yml
+
+- name: "HIGH | V-38497 | AUDIT | The system must not have accounts configured with blank or null passwords"
+  command: grep nullok /etc/pam.d/system-auth
+  changed_when: false
+  always_run: yes
+  ignore_errors: yes
+
+- name: "MEDIUM | V-38483 | AUDIT | The system package management tool must cryptographically verify the authenticity of system software packages during installation."
+  shell: find /etc/yum{.conf,.repos.d/*.repo} -exec grep -ls '^gpgcheck=0' {} \;
+  changed_when: false
+  always_run: yes
+  ignore_errors: yes
+
+- name: "MEDIUM | V-38492 | AUDIT | The system must prevent the root account from logging in from virtual consoles."
+  command: grep '^vc/[0-9]' /etc/securetty
+  register: vc_root_login_audit
+  always_run: yes
+  changed_when: no
+  failed_when: vc_root_login_audit.stdout_lines|length > 0
+  ignore_errors: yes
+
+- name: "MEDIUM | V-38496 | AUDIT | Default system accounts, other than root, must be locked"
+  shell: >
+   awk -F: '$1 !~ /^root$/ && $2 !~ /^[!*]/ {print $1}' /etc/shadow | xargs -I{} grep {} /etc/passwd | awk -F: '$3 < 500 {print $1}'
+  register: unlocked_sys_accounts_audit
+  changed_when: false
+  always_run: yes
+  ignore_errors: yes
+
+- name: "LOW | V-38447, V-38452, V-38453, V-38454 | AUDIT | Verify all rpm packages and store output for later use."
+  command: rpm -Va
+  changed_when: false
+  failed_when: false
+  register: rpm_verify_packages
+  always_run: yes
+
+- name: "LOW | V-38452 | AUDIT | The system package management tool must verify permissions on all files and directories associated with packages."
+  command: rpm -qf {{ item | regex_replace('^.M.......\\s+[a-z]?\\s*(/.+)$', '\\1') }}
+  when: item | match("^.M.......\\s+.*?/.+$")
+  register: rpm_file_permissions_audit
+  with_items: rpm_verify_packages.stdout_lines
+  always_run: yes
+
+- name: "LOW | V-38480 | AUDIT | Users must be warned 7 days in advance of password expiration."
+  command: grep '^PASS_WARN_AGE' /etc/login.defs
+  register: logindefs_pass_warn_age_audit
+  failed_when: logindefs_pass_warn_age_audit.rc == 2
+  changed_when: false
+  always_run: yes
+
+
