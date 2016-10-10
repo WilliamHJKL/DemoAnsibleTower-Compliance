@@ -1,6 +1,6 @@
 ---
 
-- name: Apply motd to all hosts.
+- name: Apply compliance check to hosts
   hosts: all
   tasks:
 
