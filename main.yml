@@ -1,6 +1,6 @@
 ---
 
-- name: Apply compliance check to hosts
+- name: Check compliance check to hosts
   hosts: all
   tasks:
 
