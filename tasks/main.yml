@@ -1,86 +1,28 @@
 ---
-# Preliminary tasks.
-- name: "PRELIM | Set gpg_key_url for Red Hat"
-  set_fact:
-      gpg_key_url: https://www.redhat.com/security/fd431d51.txt
-  when: "ansible_distribution == 'RedHat'"
-  always_run: yes
-
-- name: "PRELIM | List users accounts"
-  command: "awk -F: '{print $1}' /etc/passwd"
-  register: users
-  changed_when: false
-  always_run: yes
-
-- name: "PRELIM | Identify Unlocked Accounts"
-  shell: >
-      awk -F: '$1 !~ /^root$/ && $2 !~ /^[!*]/ {print $1}' /etc/shadow
-  register: unlocked_accounts
-  changed_when: false
-  always_run: yes
-
-- name: "PRELIM | Identify Unlocked Sys Accounts"
-  shell: >
-      awk -F: '$1 !~ /^root$/ && $2 !~ /^[!*]/ {print $1}' /etc/shadow | xargs -I{} grep {} /etc/passwd | awk -F: '$3 < 500 {print $1}'
-  register: unlocked_sys_accounts
-  changed_when: false
-  always_run: yes
-
-- name: "PRELIM | List system accounts"
-  shell: "grep -Ev '/home|root' /etc/passwd | cut -d : -f 1"
-  register: system_users
-  changed_when: false
-  always_run: yes
-
 - include: version.yml
 
-- name: "HIGH | V-38497 | AUDIT | The system must not have accounts configured with blank or null passwords"
-  command: grep nullok /etc/pam.d/system-auth
-  changed_when: false
-  always_run: yes
-  ignore_errors: yes
-
-- name: "MEDIUM | V-38483 | AUDIT | The system package management tool must cryptographically verify the authenticity of system software packages during installation."
-  shell: find /etc/yum{.conf,.repos.d/*.repo} -exec grep -ls '^gpgcheck=0' {} \;
-  changed_when: false
-  always_run: yes
-  ignore_errors: yes
-
-- name: "MEDIUM | V-38492 | AUDIT | The system must prevent the root account from logging in from virtual consoles."
-  command: grep '^vc/[0-9]' /etc/securetty
-  register: vc_root_login_audit
-  always_run: yes
+- name: "HIGH | RHEL-07-010010 | AUDIT | The file permissions, ownership, and group membership of system files and commands must match the vendor values."
+  shell: 'rpm -Va | grep ''^.M'''
+  failed_when: no
   changed_when: no
-  failed_when: vc_root_login_audit.stdout_lines|length > 0
   ignore_errors: yes
+  register: rhel_07_010010_audit
 
-- name: "MEDIUM | V-38496 | AUDIT | Default system accounts, other than root, must be locked"
-  shell: >
-   awk -F: '$1 !~ /^root$/ && $2 !~ /^[!*]/ {print $1}' /etc/shadow | xargs -I{} grep {} /etc/passwd | awk -F: '$3 < 500 {print $1}'
-  register: unlocked_sys_accounts_audit
-  changed_when: false
-  always_run: yes
+- name: "HIGH | RHEL-07-020310 | AUDIT | The root account must be the only account having unrestricted access to the system."
+  command: 'awk -F: ''$3 == 0 && $1 !~ /root/ {print $1}'' /etc/passwd'
+  failed_when: no
+  changed_when: no
   ignore_errors: yes
+  register: rhel_07_020310_audit
 
-- name: "LOW | V-38447, V-38452, V-38453, V-38454 | AUDIT | Verify all rpm packages and store output for later use."
-  command: rpm -Va
-  changed_when: false
-  failed_when: false
-  register: rpm_verify_packages
-  always_run: yes
+- name: "HIGH | RHEL-07-010020 | AUDIT | The cryptographic hash of system files and commands must match vendor values."
+  shell: 'rpm -Va | grep ''^..5'' | grep -E ''/.?bin/'''
+  failed_when: no
+  changed_when: no
+  ignore_errors: yes
+  register: rhel_07_010020_audit
 
-- name: "LOW | V-38452 | AUDIT | The system package management tool must verify permissions on all files and directories associated with packages."
-  command: rpm -qf {{ item | regex_replace('^.M.......\\s+[a-z]?\\s*(/.+)$', '\\1') }}
-  when: item | match("^.M.......\\s+.*?/.+$")
-  register: rpm_file_permissions_audit
-  with_items: rpm_verify_packages.stdout_lines
-  always_run: yes
-
-- name: "LOW | V-38480 | AUDIT | Users must be warned 7 days in advance of password expiration."
-  command: grep '^PASS_WARN_AGE' /etc/login.defs
-  register: logindefs_pass_warn_age_audit
-  failed_when: logindefs_pass_warn_age_audit.rc == 2
-  changed_when: false
-  always_run: yes
-
-
+- name: "HIGH | RHEL-07-010020 | PATCH | The cryptographic hash of system files and commands must match vendor values."
+  shell: yum reinstall -y $(rpm -qf {{ item.split(' ')[-1] }})
+  with_items: "{{ rhel_07_010020_audit.stdout_lines }}"
+  when: rhel_07_010020_audit.stdout_lines | length > 0
