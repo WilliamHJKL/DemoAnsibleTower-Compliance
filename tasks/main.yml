@@ -25,17 +25,3 @@
   with_items: "{{ rhel_07_010020_audit.stdout_lines }}"
   when: rhel_07_010020_audit.stdout_lines | length > 0
 
-- name: "MEDIUM | V-38465 | AUDIT | Library files must have mode 0755 or less permissive"
-  become_user: root
-  script: sys_libs_with_bad_perms.sh
-  register: library_perms_audit
-  changed_when: no
-  ignore_errors: yes
-
-- name: "MEDIUM | V-38465 | FIX | Library files must have mode 0755 or less permissive"
-  file:
-      state: file
-      mode: "go-w"
-      path: "{{ item }}"
-  when: library_perms_audit.stdout
-  with_items: library_perms_audit.stdout_lines
