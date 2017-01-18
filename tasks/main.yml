@@ -25,3 +25,8 @@
   with_items: "{{ rhel_07_010020_audit.stdout_lines }}"
   when: rhel_07_010020_audit.stdout_lines | length > 0
 
+- name: "HIGH | RHEL-07-040590 | PATCH | The SSH daemon must be configured to only use the SSHv2 protocol."
+  lineinfile:
+    dest: /etc/ssh/sshd_config
+    regexp: (?i)^#?protocol
+    line: Protocol 2
